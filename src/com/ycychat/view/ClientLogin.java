@@ -2,12 +2,20 @@ package com.ycychat.view;
 
 import java.awt.*;
 import java.awt.event.*;
+import java.net.Socket;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.swing.*;
 
 import com.ycychat.control.YcychatClientConnection;
+import com.ycychat.model.Message;
+import com.ycychat.model.MessageType;
 import com.ycychat.model.User;
 
 public class ClientLogin extends JFrame implements ActionListener {
+
+    /** 实验18 第4步：保存登录用户的用户名和对应的好友列表界面 */
+    public static ConcurrentHashMap<String, FriendList> hmFriendList = new ConcurrentHashMap<>();
+
     JLabel jl2;
     JButton jb1, jb2, jb3;
     JPanel jp1;
@@ -90,12 +98,39 @@ public class ClientLogin extends JFrame implements ActionListener {
             user.setPassword(password);
 
             if (new YcychatClientConnection().loginValidate(user)) {
-                new FriendList(name);
+                // 实验18：保存好友列表界面，供接收线程激活在线好友图标
+                hmFriendList.put(name, new FriendList(name));
                 System.out.println("客户端登录成功！");
+
+                // 实验18：请求服务器返回在线好友的名字
+                Message request = new Message();
+                request.setSender(name);
+                request.setReceiver("Server");
+                request.setMessageType(MessageType.REQUEST_ONLINE_FRIEND);
+                sendMessage(YcychatClientConnection.s, request);
+
+                // 实验18 第2步：通知所有在线好友，自己已上线
+                Message newOnline = new Message();
+                newOnline.setSender(name);
+                newOnline.setReceiver("Server");
+                newOnline.setMessageType(MessageType.NEW_ONLINE_TO_ALL_FRIEND);
+                sendMessage(YcychatClientConnection.s, newOnline);
+
                 this.dispose();
             } else {
                 JOptionPane.showMessageDialog(this, "密码错误，请重新登录！");
             }
         }
+    }
+
+    /**
+     * 实验18 第3步：向服务器发送消息。
+     */
+    public void sendMessage(Socket s, Message mess) {
+        if (s == null || !s.isConnected()) {
+            System.out.println("未连接服务器，消息发送失败。");
+            return;
+        }
+        YcychatClientConnection.sendMessage(mess);
     }
 }

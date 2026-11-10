@@ -11,16 +11,29 @@ import com.ycychat.model.User;
 
 /**
  * 客户端连接类，负责向服务器发送登录信息并接收校验结果。
+ * 登录成功后启动接收线程，持续接收服务器转发的消息。
  */
 public class YcychatClientConnection {
-    Socket s;
+
+    /** 与服务器建立的 Socket 连接，聊天窗口发送消息时也使用该连接 */
+    public static Socket s;
+    /** 复用的对象输出流 */
+    public static ObjectOutputStream oos;
+    /** 复用的对象输入流 */
+    public static ObjectInputStream ois;
 
     public YcychatClientConnection() {
         try {
             s = new Socket("127.0.0.1", 3456);
             System.out.println("客户端连接成功：" + s);
+            oos = new ObjectOutputStream(s.getOutputStream());
+            oos.flush();
+            ois = new ObjectInputStream(s.getInputStream());
         } catch (IOException e) {
-            e.printStackTrace();
+            System.out.println("连接服务器失败，请先启动服务器！");
+            s = null;
+            oos = null;
+            ois = null;
         }
     }
 
@@ -32,15 +45,20 @@ public class YcychatClientConnection {
      */
     public boolean loginValidate(User user) {
         boolean loginSuccess = false;
+        if (s == null || oos == null || ois == null) {
+            return false;
+        }
         try {
-            ObjectOutputStream oos = new ObjectOutputStream(s.getOutputStream());
             oos.writeObject(user);
+            oos.flush();
 
-            ObjectInputStream ois = new ObjectInputStream(s.getInputStream());
             Message mess = (Message) ois.readObject();
-
-            if (mess.getMessageType().equals(MessageType.LOGIN_VALIDATE_SUCCESS)) {
+            if (MessageType.LOGIN_VALIDATE_SUCCESS.equals(mess.getMessageType())) {
                 loginSuccess = true;
+                // 实验16 第6步：登录成功后创建客户端接收线程
+                new ClientReceiverThread(s, ois).start();
+            } else {
+                s.close();
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -48,5 +66,23 @@ public class YcychatClientConnection {
             e.printStackTrace();
         }
         return loginSuccess;
+    }
+
+    /**
+     * 向服务器发送消息。
+     */
+    public static void sendMessage(Message mess) {
+        if (s == null || oos == null) {
+            System.out.println("尚未连接服务器，消息发送失败。");
+            return;
+        }
+        try {
+            synchronized (oos) {
+                oos.writeObject(mess);
+                oos.flush();
+            }
+        } catch (IOException e) {
+            System.out.println("发送消息失败：" + e.getMessage());
+        }
     }
 }

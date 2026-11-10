@@ -2,9 +2,19 @@ package com.ycychat.view;
 
 import java.awt.*;
 import java.awt.event.*;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.swing.*;
 
+import com.ycychat.model.Message;
+
 public class FriendList extends JFrame implements ActionListener, MouseListener {
+
+    /**
+     * 实验16 第8步：保存“当前用户to好友名”和对应的聊天界面。
+     * 使用 ConcurrentHashMap，避免界面线程与接收线程同时读写出错。
+     */
+    public static ConcurrentHashMap<String, FriendChat> hmFriendChat = new ConcurrentHashMap<>();
+
     JPanel friendPanel;
     JButton myFriendButton1;
     JButton myStrangerButton1;
@@ -35,9 +45,12 @@ public class FriendList extends JFrame implements ActionListener, MouseListener 
 
         friendListPanel1 = new JPanel(new GridLayout(MYFRIENDCOUNT, 1));
         for (int i = 0; i < friendLabel1.length; i++) {
-            String imageStr = "Images/" + (int) (Math.random() * 6) + ".jpg";
+            String imageStr = "images/" + (int) (Math.random() * 6) + ".jpg";
             ImageIcon imageIcon = new ImageIcon(imageStr);
-            friendLabel1[i] = new JLabel(i + "号好友", imageIcon, JLabel.LEFT);
+            // 实验16 第13步：好友名字改为数字，便于与登录用户名对应
+            friendLabel1[i] = new JLabel(i + "", imageIcon, JLabel.LEFT);
+            // 实验18：默认处于离线状态（图标变灰），上线后再激活
+            friendLabel1[i].setEnabled(false);
             friendLabel1[i].addMouseListener(this);
             friendListPanel1.add(friendLabel1[i]);
         }
@@ -63,7 +76,7 @@ public class FriendList extends JFrame implements ActionListener, MouseListener 
 
         strangerListPanel1 = new JPanel(new GridLayout(STRANGERCOUNT, 1));
         for (int i = 0; i < strangerLabel1.length; i++) {
-            strangerLabel1[i] = new JLabel("" + i + "号陌生人", new ImageIcon("Images/touxiang_1.jpg"), JLabel.LEFT);
+            strangerLabel1[i] = new JLabel("" + i + "号陌生人", new ImageIcon("images/touxiang_1.jpg"), JLabel.LEFT);
             strangerLabel1[i].addMouseListener(this);
             strangerListPanel1.add(strangerLabel1[i]);
         }
@@ -106,7 +119,39 @@ public class FriendList extends JFrame implements ActionListener, MouseListener 
         if (arg0.getClickCount() == 2) {
             JLabel jl = (JLabel) arg0.getSource();
             String toName = jl.getText();
-            new FriendChat(name + " 对 " + toName);
+            // 实验16 第10步：创建并保存 FriendChat 对象
+            FriendChat fc = new FriendChat(name, toName);
+            hmFriendChat.put(name + "to" + toName, fc);
+        }
+    }
+
+    /**
+     * 实验18：根据服务器返回的在线好友字符串，激活全部在线好友图标。
+     */
+    public void activeOnlineFriendIcon(Message mess) {
+        String content = mess.getContent();
+        if (content == null) {
+            return;
+        }
+        String[] onlineFriends = content.trim().split("\\s+");
+        for (String onlineFriend : onlineFriends) {
+            if (!onlineFriend.isEmpty()) {
+                activeNewOnlineFriendIcon(onlineFriend);
+            }
+        }
+    }
+
+    /**
+     * 实验18 第9步：激活新上线好友的图标。
+     */
+    public void activeNewOnlineFriendIcon(String newOnlineFriend) {
+        try {
+            int index = Integer.parseInt(newOnlineFriend.trim());
+            if (index >= 0 && index < friendLabel1.length) {
+                friendLabel1[index].setEnabled(true);
+            }
+        } catch (NumberFormatException e) {
+            System.out.println("好友名不是数字，无法激活图标：" + newOnlineFriend);
         }
     }
 
